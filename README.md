@@ -68,12 +68,27 @@ p1.then((res) => {
 
 ```javascript
 //thenable可能指如下情况
-const obj = {
-  then: function () {
-    //...
+let thenable = {
+  then: function (resolve, reject) {
+    resolve({
+      then: function (resolve, reject) {
+        resolve({
+          then: function (resolve, reject) {
+            resolve(42);
+          },
+        });
+      },
+    });
   },
 };
-obj.then.then = obj.then;
+
+var promise1 = new Promise((resolve, reject) => {
+  resolve(thenable);
+});
+
+promise1.then(function (value) {
+  console.log(value);
+});
 ```
 
 > - 如果 then 不是函数，以 x 为参数执行 promise
