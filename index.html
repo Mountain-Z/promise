@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+
+  <script>
+
+    const PENDING = 'pending'
+    const FULFILLED = 'fulfilled'
+    const REJECTED = 'rejected'
+
+    function MyPromise(executor) {
+      this.status = PENDING
+      this.value = undefined
+      this.reason = undefined;
+
+      this.fulfilledArr = []
+      this.rejectedArr = []
+
+      const resolve = (value) => {
+        if (this.status === PENDING) {
+          this.value = value
+          this.status = FULFILLED
+          this.fulfilledArr.forEach((cb) => cb())
+        }
+      }
+
+      const reject = (reason) => {
+        if (this.status === PENDING) {
+          this.reason = reason
+          this.status = REJECTED
+          this.rejectedArr.forEach((cb) => cb())
+        }
+      }
+
+      try {
+        executor(resolve, reject)
+      } catch (err) {
+        reject(err)
+      }
+
+    }
+
+    MyPromise.prototype.then = function (onFulfilled, onRejected) {
+
+      onFulfilled = typeof onFulfilled === 'function' ? onFulfilled : (value) => value
+      onRejected = typeof onRejected === 'function' ? onRejected : (reason) => { throw reason }
+
+      const promise2 = new MyPromise((resolve, reject) => {
+
+        const fulfilledFN = () => {
+          setTimeout(() => {
+            try {
+              const temp = onFulfilled(this.value)
+              resolvePromise(promise2, temp, resolve, reject)
+            } catch (err) {
+              reject(err)
+            }
+          })
+        }
+
+        const rejectedFN = () => {
+          setTimeout(() => {
+            try {
+              const temp = onRejected(this.reason)
+              resolvePromise(promise2, temp, resolve, reject)
+            } catch (err) {
+              reject(err)
+            }
+          })
+        }
+
+        switch (this.status) {
+          case PENDING:
+            this.fulfilledArr.push(() => {
+              fulfilledFN();
+            })
+
+            this.rejectedArr.push(() => {
+              rejectedFN();
+            })
+
+            break;
+          case FULFILLED:
+            fulfilledFN()
+            break;
+          case REJECTED:
+            rejectedFN()
+            break;
+        }
+      })
+      return promise2
+    }
+
+
+    const resolvePromise = (promise, x, resolve, reject) => {
+      if (promise === x) {
+        throw new TypeError('循环引用')
+      }
+
+      if (x !== null && (typeof x === 'function' || typeof x === 'object')) {
+        const then = x.then
+        // 防止在thenable对象当中多次调用resolve，reject
+        let used = false
+        if (typeof then === 'function') {
+          then.call(x, y => {
+            if (used) return
+            used = true
+            resolvePromise(promise, y, resolve, reject)
+          }, err => {
+            if (used) return
+            used = true
+            reject(err)
+          })
+        } else {
+          resolve(x)
+        }
+      } else {
+        resolve(x)
+      }
+    }
+
+
+    MyPromise.resolve = function (value) {
+      if (value instanceof MyPromise) {
+        return value
+      }
+
+      return new MyPromise((resolve) => { resolve(value) })
+    }
+
+    MyPromise.reject = function (reason) {
+      if (reason instanceof MyPromise) {
+        return reason
+      }
+
+      return new MyPromise((_, reject) => { reject(reason) })
+    }
+
+    MyPromise.all = function (args) {
+      const len = args.length
+      const res = []
+      let count = 0
+      return new MyPromise((resolve, reject) => {
+        for (let i = 0; i < len; i++) {
+          try {
+            Promise.resolve(args[i]).then((data) => {
+              res[i] = data
+              if (++count === len) {
+                resolve(res)
+              }
+            })
+          } catch (err) {
+            reject(err)
+          }
+        }
+      })
+    }
+
+    MyPromise.race = function (args) {
+      const len = args.length
+      return new MyPromise((resolve, reject) => {
+        for (let i = 0; i < len; i++) {
+          try {
+            Promise.resolve(args[i]).then((data) => {
+              resolve(data)
+            })
+          } catch (err) {
+            reject(err)
+          }
+        }
+      })
+    }
+
+  </script>
+
+  <script>
+
+    const fn = new MyPromise((resolve, reject) => {
+      setTimeout(() => {
+        resolve(200)
+      }, 200)
+    })
+
+    const getData = () => {
+      fn.then((res) => {
+        console.log(res)
+        return 12
+      }).then((res2) => {
+        console.log(res2)
+      })
+    }
+
+    getData()
+
+    // promise.all 测试
+
+    const a = MyPromise.resolve(1)
+
+    const fn2 = new MyPromise((resolve, reject) => {
+      setTimeout(() => {
+        resolve(100)
+      }, 100)
+    })
+
+
+    MyPromise.all([a, fn, fn2]).then(res => { console.log('all=====', res) })
+    MyPromise.race([fn, fn2]).then(res => { console.log('race=====', res) })
+
+  </script>
+</body>
+
+</html>
